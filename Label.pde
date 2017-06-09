@@ -4,13 +4,14 @@ class Label {
   Body body;
   float x, y, w, h;
   color c;
+  boolean voted;
   String text;
 
   Label(float x_, float y_, float w_, float h_, color c_, String text_) {
     x = x_;
     y = y_;
-    w = 30;
-    h = 20;
+    w = 10;
+    h = 6;
     c = c_;
     text = text_;
     
@@ -19,6 +20,10 @@ class Label {
   }
 
   void killBody() {
+    if (!voted) {
+    //  addTruth();
+    // voted = true;
+    }
     box2d.destroyBody(body);
   }
 
