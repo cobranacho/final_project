@@ -21,8 +21,12 @@ class Label {
 
   void killBody() {
     if (!voted) {
-    //  addTruth();
-    // voted = true;
+      if (x < 0) {
+        addTruth();
+      } else {
+        addHoax();
+      }
+      graphBuildings();
     }
     box2d.destroyBody(body);
   }
@@ -30,7 +34,7 @@ class Label {
   boolean done() {
     Vec2 pos = box2d.getBodyPixelCoord(body);
     // kill this it is beyond the screen view
-    if (pos.y > height + w * h || pos.x > width + w * h || pos.x < 0 - w * h) {
+    if (pos.y > height + w * h || pos.x > 300 + w * h || pos.x < -300 - w * h) {
       killBody();
       return true;
     }

@@ -29,14 +29,14 @@ class Boundary {
 
     float box2dW = box2d.scalarPixelsToWorld(w / 2);
     float box2dH = box2d.scalarPixelsToWorld(h / 2);
-
+    
     ps.setAsBox(box2dW, box2dH);
 
     // define the body
     BodyDef bodydefinition = new BodyDef();
     bodydefinition.type = BodyType.STATIC;
     bodydefinition.angle = angle;
-    bodydefinition.position.set(box2d.coordPixelsToWorld(x, y));
+    bodydefinition.position.set(box2d.coordPixelsToWorld(x - 300, y));
     boundaryBody = box2d.createBody(bodydefinition);
 
     // Attached the shape to the body
@@ -97,18 +97,14 @@ class Boundary {
       reduceHeight();
     }
 
-    //fill(0);
-    //stroke(0);
-    //strokeWeight(1);
-    //rectMode(CENTER);
+ 
     if (visible == true) {
       pushMatrix();
       translate(x, y);
       rotate(-angle);
-      //  rect(0, 0, w, h);
-
-      pushMatrix();
       translate(w / 2, -h / 2);
+      pushMatrix();
+ 
       extrudeBoundary.setTexture(textureImg, (w + h) * 2, 1);
       extrudeBoundary.draw();
 
@@ -117,7 +113,6 @@ class Boundary {
         extrudeBoundary.drawMode(S3D.TEXTURE, S3D.S_CAP);
       }
       popMatrix();
-
       popMatrix();
     }
   }
