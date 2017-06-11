@@ -1,3 +1,17 @@
+/* //<>//
+ Project: Final Project 
+ Student: James Hu
+ Pasadena City College, Spring 2017
+ Prof. Masood Kamandy
+ Project Description: The program grabs the most shared social media stories and metaphorically 
+ illustrates the difficulty of ascertain both source and authenticity, and the effect of sea level rise
+ Last Modified: June 10, 2017
+ 
+ Controls: 1, 2, 3, 4, 5 - change view angle
+           left, right - tilt the land 
+           r - add real news
+           f - add fake news
+ */
 
 // import box2d library
 import shiffman.box2d.*;
@@ -11,65 +25,91 @@ import shapes3d.animation.*;
 import shapes3d.*;
 
 import peasy.*;
+import ddf.minim.*;
+
+Minim minim;
+AudioPlayer ding, collapse;
 
 PeasyCam camera;
 PShader texlightShader;
 
 // A reference to our box2d world
 Box2DProcessing box2d;
-int horizontalAccel = 0;
 
 ArrayList<Boundary> boundaries;
 ArrayList<Boundary> removalList;
 ArrayList<Label> labels;
+ArrayList<NewsMessage> newsMessages;
+ArrayList<NewsMessage> removeM;
 
 PShape land;
 PImage texture;
+float alphaStep, landAlpha = 255;
+color landColor = color(160, 160, 160, landAlpha);
+color oceanColor = color(92, 162, 198);
+
 
 Table buildingTable;
 
 Posts posts;
 Post currentDisplay;
-String newsTitle, newsEntity;
-int newsShares, tickerX, entityTransparency;
+String newsTitle, newsEntity, newsLabel1, newsLabel2;
+int newsShares, tickerX, entityTransparency, randomSelect, selector, counter, numBuildings;
 color newsColor;
 PGraphics newsCanvas, entityCanvas;
 boolean displayingNews;
 
 int fakeHoax, realTruth;
-float tiltAngle;
+float tiltAngle, centering;
 
 ArrayList<String> newsPersons;
 ArrayList<String> newsOrgs;  
 ArrayList<String> newsLocales;
 
+
+int generateSeed() {
+  return int(random(120, 480));
+}
 void getPosts() {
   posts.queryData();
 }
 
 void setup() {
-  size(1600, 1000, P3D);
+  // size(800, 1000, P3D);
+  noCursor();
+
+  minim = new Minim(this);
+  ding = minim.loadFile("ding.mp3");
+  ding.setVolume(0.2);
+  collapse = minim.loadFile("collapse.mp3");
+  collapse.setVolume(0.5);
 
   // load the top shared news from social media with the tag climate change
   posts  = new Posts();
-  // thread("getPosts");
+  thread("getPosts");
 
   newsCanvas = createGraphics(int(width * 0.75), int(height * 0.1), P2D); 
   entityCanvas = createGraphics(int(width * 0.25), int(height * 0.1), P2D);
   tickerX = newsCanvas.width + 10;
   newsEntity = "Please wait";
   newsTitle = "Loading the most shared stories on climate change ...";
-
   texlightShader = loadShader("texlightfrag.glsl", "texlightvert.glsl");
+  newsLabel1 = "Fake Hoax";
+  newsLabel2 = "Real Truth";
+  randomSelect = generateSeed();
 
-  camera = new PeasyCam(this, 0, height / 2 - 30, 0, 1600);
+  camera = new PeasyCam(this, 0, height / 2 - 50, 0, 1200);
+  camera.setActive(false);
+
   smooth();
-  // fullScreen(P3D);
+  fullScreen(P3D);
 
   // Setup buildings and boundaries
   boundaries = new ArrayList<Boundary>();
   removalList = new ArrayList<Boundary>();
   labels = new ArrayList<Label>();
+  newsMessages = new ArrayList<NewsMessage>();
+  removeM = new ArrayList<NewsMessage>();
 
   // Initialize box2d physics
   box2d = new Box2DProcessing(this);
@@ -80,6 +120,7 @@ void setup() {
 
   // load the land obj
   land = loadShape("land.obj");
+  land.setFill(landColor);
 
   // add the boundaries;
   buildingTable = loadTable("bins.csv", "header");
@@ -90,20 +131,21 @@ void setup() {
     float w = row.getFloat("w");
     float h = row.getFloat("h");
     x = x + w / 2;
-    //y = y - h / 2;
     float angle = row.getFloat("angle");
     boundaries.add(new Boundary(x, y, w, h, radians(angle), 50, true, true));
   }
-  
+
   buildingTable = loadTable("borders.csv", "header");
 
   for (TableRow row : buildingTable.rows()) {
     float x = row.getFloat("x");
     float y = row.getFloat("y");
-    float w = row.getFloat("w") * 2;
-    float h = row.getFloat("h") * 2;
+    float w = row.getFloat("w");
+    float h = row.getFloat("h");
+    x = x + w / 2;
+    y = y + h / 2;
     float angle = row.getFloat("angle");
-    boundaries.add(new Boundary(x, y, w, h, radians(angle), 50, true, true));
+    boundaries.add(new Boundary(x, y, w, h, radians(angle), 50, false, true));
   }
 
   buildingTable = loadTable("buildings.csv", "header");
@@ -114,31 +156,21 @@ void setup() {
     float w = row.getFloat("w");
     float h = row.getFloat("h");
     float angle = row.getFloat("angle");
-    int tall = int(w * h / random(3, 6));
+    int tall = int(w * h / random(4.5, 6.5));
 
     boundaries.add(new Boundary(x, y, w, h, radians(angle), tall, true, false));
   }
-}
 
-void drawBins() {
+  numBuildings = boundaries.size();
+  alphaStep = 255.0 / numBuildings;
 }
 
 void draw() {
 
   //  shader(texlightShader);
 
-
-  if (random(0, 1) < 0.05) {
-    Label lbl = new Label(int(random(-90, 150)), 30, 50, 40, newsColor, newsTitle);
-    labels.add(lbl);
-  }
-
-
-  println("Truth: " + realTruth, "Fake: " + fakeHoax);
-
-
-  colorMode(RGB);
-  background(20, 19, 182);
+  colorMode(RGB); 
+  background(oceanColor);
 
   if (posts.dataLoaded == true && displayingNews == false ) {
     updateNews();
@@ -152,8 +184,21 @@ void draw() {
   drawNews();
 
   camera.beginHUD();
+
+  for (int i = 0; i < newsMessages.size(); i++) {
+    float cc = newsMessages.get(i).alpha;
+    if (newsMessages.get(i).type == 0) {
+      fill(0, 244, 0, cc);
+    } else {
+      fill(244, 0, 0, cc);
+    }
+    newsMessages.get(i).display();
+    newsMessages.get(i).updatePos();
+  }
+
   image(newsCanvas, width - newsCanvas.width, 0);
   image(entityCanvas, 0, 0);
+
   camera.endHUD();
 
   // forward box2d time
@@ -167,14 +212,11 @@ void draw() {
   rotateX(-PI / 2);
   shape(land, 0, 0);
   popMatrix();
-
   pushMatrix();
   translate(-300, 0, 0);
-
   for (int i = 0; i < boundaries.size(); i++) {
     boundaries.get(i).display();
   }
-
   popMatrix();
 
   // display news labels
@@ -192,7 +234,27 @@ void draw() {
     popMatrix();
   }
 
+  if (counter >= randomSelect) {
+    randomSelect = generateSeed();
+    counter = 0;
+  }
+
+  selector = randomSelect % 2;
+  drawNewsLabels(selector);
+
   popMatrix();
+
+  // find and remove old messages
+  if (newsMessages.size() > 0) {
+    for (NewsMessage n : newsMessages) {
+      if (n.visible == 0) {
+        removeM.add(n);
+      }
+    }
+  }
+  for (NewsMessage m : removeM) {
+    newsMessages.remove(m);
+  } 
 
   // remove the label if position if beyond play area
   for (int i = labels.size() - 1; i >= 0; i--) {
@@ -201,24 +263,126 @@ void draw() {
       labels.remove(i);
     }
   }
+  counter++;
+
+  if (keyPressed) {
+    if (key == CODED) {
+      if (keyCode == RIGHT) {
+        tiltAngle += 0.2;
+        tiltAngle = constrain(tiltAngle, -15, 15);
+        box2d.setGravity(tiltAngle / 1.5, -9.8);
+      }
+      if (keyCode == LEFT) {
+
+        tiltAngle -= 0.2;
+        tiltAngle = constrain(tiltAngle, -10, 10);
+        box2d.setGravity(tiltAngle / 1.5, -9.8);
+      }
+    }
+  }
+
+  if (tiltAngle > 0) {
+    centering = -0.1;
+  } 
+  if (tiltAngle < 0) {
+    centering = 0.1;
+  }
+
+  if (centering != 0) {
+    tiltAngle += centering;
+    box2d.setGravity(tiltAngle / 1.5, -9.8);
+  }
 }
 
+void drawNewsLabels(int select) {
+  int x1, x2;
+
+  if (select == 0) {
+    x1 = 150;
+    x2 = 450;
+  } else {
+    x1 = 450;
+    x2 = 150;
+  }
+
+  int y = 1080;
+  pushMatrix();
+  translate(-300, 0);
+  pushStyle();
+  textSize(36);
+  colorMode(RGB);
+  rectMode(CENTER);
+  fill(244, 0, 0);
+  stroke(200, 0, 0);
+  rect(x1, y, 200, 50);
+  fill(255);
+  textAlign(CENTER, CENTER);
+  text(newsLabel1, x1, y - 6, 2);
+  popStyle();
+
+  pushStyle();
+  textSize(36);
+  colorMode(RGB);
+  rectMode(CENTER);
+  fill(0, 244, 0);
+  stroke(0, 200, 0);
+  rect(x2, y, 200, 50);
+  fill(0);
+  textAlign(CENTER, CENTER);
+  text(newsLabel2, x2, y - 6, 2);
+  popStyle();
+  popMatrix();
+}
+
+void reduceColor() {
+  landAlpha -= alphaStep * 1.1;
+  landColor = color(160, 160, 160, landAlpha);
+  land.setFill(landColor);
+}
 
 Extrusion getExtrusion(Path path, Contour contour, ContourScale contourScale) {
   return new Extrusion(this, path, 1, contour, contourScale);
 }
 
+void playDing() {
+  if (!ding.isPlaying()) {
+    if (ding.position() == ding.length()) {
+      ding.rewind();
+      ding.play();
+    } else {      
+      ding.rewind();
+      ding.play();
+    }
+  }
+}
+
+
+void playCollapse() {
+  if (!collapse.isPlaying()) {
+    if (collapse.position() == collapse.length()) {
+      collapse.rewind();
+      collapse.play();
+    } else {      
+      collapse.rewind();
+      collapse.play();
+    }
+  }
+}
 void changeDirection(float x) {
   // set the gravity
   box2d.setGravity(x, -9.8);
 }
 
-void addHoax() {
+void addHoax(String hoax) {
   fakeHoax++;
+  newsMessages.add(new NewsMessage("+Hoax: " + hoax, 1));
+  playDing();
 }
 
-void addTruth() {
+void addTruth(String truth) {
   realTruth++;
+  newsMessages.add(new NewsMessage("+Truth: " + truth, 0));
+  playDing();
 }
 
 void updateNews() {
@@ -229,9 +393,7 @@ void updateNews() {
   newsTitle = currentDisplay.title;
   newsShares = currentDisplay.shares;
   colorMode(HSB);
-  newsColor = color(random(0, 255), random(200, 255), random(200, 255));
-
-
+  newsColor = color(random(0, 255), random(200, 255), random(200, 255), 255);
 
   int labelCounts = int(ceil(newsShares / 100.0));
   for (int i = 0; i < labelCounts; i++) {
@@ -329,7 +491,6 @@ PImage createTexture(color c, int tallness) {
   return img;
 }
 
-
 PImage createTexture(Boundary b) {
   PImage img = createImage(1, b.tallness, RGB);
   img.loadPixels();
@@ -374,32 +535,39 @@ PImage createTexture(int r, int g, Boundary b) {
   return img;
 }
 
-
-
-
 void keyPressed() {
-  println(tiltAngle);
 
-  if (key == CODED) {
-    if (keyCode == RIGHT) {
-      println("RIGHT");
-      tiltAngle += 2;
-      tiltAngle = constrain(tiltAngle, -10, 10);
-      box2d.setGravity(tiltAngle / 2, -9.8);
-    }
-    if (keyCode == LEFT) {
-      println("LEFT");
-      tiltAngle -= 2;
-      tiltAngle = constrain(tiltAngle, -10, 10);
-      box2d.setGravity(tiltAngle / 2, -9.8);
-    }
-  } else {
-    println("CENTERING");
-    if (tiltAngle > 0) {
-      tiltAngle -= 0.2;
-    } else if (tiltAngle < 0) {
-      tiltAngle += 0.2;
-    }
+  if (key == '6') {
+    camera.setRotations(0.5, 0, -PI);
+    camera.setDistance(1000);
+    camera.lookAt(0, height / 2 - 30, 0);
+  }
+  if (key == '5') {
+    camera.setRotations(PI / 2, -PI / 2, PI);
+    camera.setDistance(1000);
+    camera.lookAt(0, height / 2, 100);
+  }
+
+  if (key == '4') {
+    camera.setRotations(-PI / 2, PI / 2, 0);
+    camera.setDistance(1000);
+    camera.lookAt(0, height / 2, 100);
+  }
+
+  if (key == '3') {
+    camera.setRotations(-0.732, 0.716, -0.618);
+    camera.setDistance(1100);
+    camera.lookAt(0, height / 2, 0);
+  }
+
+  if (key == '2') {
+    camera.setRotations(-0.732, -0.716, 0.618);
+    camera.setDistance(1100);
+    camera.lookAt(0, height / 2, 0);
+  }
+
+  if (key == '1') {
+    camera.reset();
   }
 
   if (key == 'f') {
@@ -411,8 +579,22 @@ void keyPressed() {
     realTruth++;
     graphBuildings();
   }
+
+  if (key == 's') {
+    Label lbl = new Label(int(random(-90, 150)), 30, 50, 40, newsColor, newsTitle);
+    labels.add(lbl);
+  }
 }
 
+void mouseReleased() {
+  //float[] pos = camera.getPosition();
+  //float[] rot = camera.getRotations();
+  //float[] lat = camera.getLookAt();
+  //println("position:", pos[0], pos[1], pos[2]);
+  //println("rotation:", rot[0], rot[1], rot[2]); 
+  //println("looking at:", lat[0], lat[1], lat[2]);
+  //println("distance:", camera.getDistance());
+}
 
 void graphBuildings() {
   for (Boundary b : boundaries) {

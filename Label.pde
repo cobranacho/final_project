@@ -14,17 +14,27 @@ class Label {
     h = 6;
     c = c_;
     text = text_;
-    
+
     // Add the box to the box2d world
     makeBody(new Vec2(x, y), w, h);
   }
 
   void killBody() {
     if (!voted) {
-      if (x < 0) {
-        addTruth();
-      } else {
-        addHoax();
+      Vec2 pos = box2d.getBodyPixelCoord(body);
+ 
+      if (pos.x < 0 && pos.x > -250) {
+        if (selector == 1) {
+          addTruth(text);
+        } else {
+          addHoax(text);
+        }
+      } else if (pos.x > 0 && pos.x < 250) {
+        if (selector == 0) {
+          addTruth(text);
+        } else {
+          addHoax(text);
+        }
       }
       graphBuildings();
     }
@@ -41,9 +51,8 @@ class Label {
     return false;
   }
 
- 
-  void display() {
 
+  void display() {
   }
 
   // This function adds the rectangle to the box2d world

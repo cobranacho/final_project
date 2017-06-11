@@ -90,11 +90,16 @@ class Boundary {
       boundaryBody.destroyFixture(fixture);
       tallness = 0;
       visible = false;
+      numBuildings--;
+      reduceColor();
+      collapse.pause();
+      collapse.rewind();
     }
 
     if (filled == 1 && tallness > 1) {
       tallness--;
       reduceHeight();
+      playCollapse();
     }
 
  
@@ -103,7 +108,6 @@ class Boundary {
       translate(x, y);
       rotate(-angle);
       translate(w / 2, -h / 2);
-      pushMatrix();
  
       extrudeBoundary.setTexture(textureImg, (w + h) * 2, 1);
       extrudeBoundary.draw();
@@ -112,7 +116,6 @@ class Boundary {
         extrudeBoundary.setTexture(textureImg, S3D.S_CAP);
         extrudeBoundary.drawMode(S3D.TEXTURE, S3D.S_CAP);
       }
-      popMatrix();
       popMatrix();
     }
   }
